@@ -1,0 +1,5 @@
+.custom-checkbox>input:checked ~ label{
+	color: #007bff!important;
+	font-weight: bold
+	padding-left: 0.75rem;
+}
