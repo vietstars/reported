@@ -26,7 +26,7 @@
 					<div class="dropdown mr-2" style="max-width:273px">
 					  <button class="btn btn-outline-light btn-sm my-2 my-sm-0" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" type="button">Select multiple projects</button>
 					  <div class="dropdown-menu" style="width:530px;max-width:530px;max-height:300px;overflow-y:auto" aria-labelledby="dropdownMenuButton">
-					  	<?php foreach($project as $k=>$v):?>
+					  	<?php foreach($projects as $k=>$v):?>
 					    <div class="custom-control custom-checkbox" style="padding-left:2rem;">
 						  <input type="checkbox" id="pr_<?=$k?>" value="<?=$k?>" name="projects[]" class="custom-control-input" <?= in_array($k,$selected)?'checked':null?>>
 						  <label class="custom-control-label" style="justify-content: left" for="pr_<?=$k?>"><?=$v?></label>

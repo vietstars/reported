@@ -193,15 +193,37 @@ class timeLogs
 	public function simpleProject()
 	{
 		$projectSumary = json_decode($this->getApi('https://redmine.lampart-vn.com/projects.xml?offset=0&limit=100'));
-		foreach ($projectSumary->project as $v) $this->list[$v->id]=$v->name;
+		foreach ($projectSumary->project as $v) {
+			if(isset($v->parent))
+				$this->list[$v->id]=$this->getParent(current($v->parent)->id,'-- '.$v->name);
+			else
+				$this->list[$v->id]=$v->name;
+		}
 		$total=ceil(current($projectSumary)->total_count/100);
 		for($i=1;$i<$total;$i++){
 			$prSumary=json_decode($this->getApi('https://redmine.lampart-vn.com/projects.xml?offset='.($i*100).'&limit=100'));
 			if(isset($prSumary->project)){
-				foreach ($prSumary->project as $v) $this->list[$v->id]=$v->name;
+				foreach ($prSumary->project as $v){
+					if(isset($v->parent))
+						$this->list[$v->id]=$this->getParent(current($v->parent)->id,'-- '.$v->name);
+					else
+						$this->list[$v->id]=$v->name;
+				}
 			}
 		}
 		$this->log('./assets/project.json',json_encode($this->list),"w");
+	}
+	public function getParent($id='',$name='')
+	{
+		if($id){
+			$info = json_decode($this->getApi('https://redmine.lampart-vn.com/projects/'.$id.'.xml'));
+			if(isset($info->parent)&&current($info->parent)->id){
+				$name='--'.$name;
+				return $this->getParent(current($info->parent)->id,$name);
+			}else{
+				return $name;	
+			}
+		}
 	}
 	public function setRanger($start='',$end='')
 	{
@@ -275,9 +297,6 @@ class timeLogs
 	}
 }
 $app = new timeLogs();
-
-
-
 if(isset($_GET['act']) && $_GET['act']=='caching'){
 	header("Content-type: application/json;charset=utf-8");
 	if(!isset($_POST['offset'])||$_POST['offset']==0){
@@ -291,15 +310,15 @@ if(isset($_GET['act']) && $_GET['act']=='caching'){
 	$app->checkTotal($_POST);
 	exit;
 }
+$projects=file_get_contents('./assets/project.json')?json_decode(file_get_contents('./assets/project.json')):$app->simpleProject();
+$selected=file_get_contents('./assets/projectSelected.json')?json_decode(file_get_contents('./assets/projectSelected.json')):[210,228,115,237,87,194,179,106,104,33,221,235];
 if(isset($_GET['act']) && $_GET['act']=='export'){
 	header("Content-type: application/json;charset=utf-8");
 	if( isset($_POST['date']) ){
 		if(file_exists('./assets/'.date('m-Y',strtotime($_POST['date'])).'/log.json')){
 			$data = json_decode(file_get_contents('./assets/'.date('m-Y',strtotime($_POST['date'])).'/log.json'));
-			$projects = array();
 			$export = array();
 			foreach ($data as $project => $tasks) {
-				array_push($projects, $project);
 				foreach ($tasks as $task => $aparts) {
 					$aparts->project = $project;
 					list($aparts->task_id,$aparts->task_name)=explode('::',$task);
@@ -377,6 +396,9 @@ if(isset($_GET['act']) && $_GET['act']=='export'){
         	 	$activeSheet->setCellValue($k.$lastest, '=SUM('.$k.$row.':'.$k.($lastest-1).')');
             }
             // $activeSheet->setCellValue('K'.$lastest, '=SUM(D'.$lastest.':I'.$lastest.')');
+            $Excel->getActiveSheet()->getStyle('J'.$lastest)
+            ->getNumberFormat()->setFormatCode('#,##0.00');
+            $Excel->getActiveSheet()->getColumnDimension('J')->setAutoSize(true);
             $activeSheet->mergeCells('A'.$lastest.':C'.$lastest);
             $Excel->getActiveSheet()
             ->getStyle('A'.$lastest)
@@ -397,9 +419,26 @@ if(isset($_GET['act']) && $_GET['act']=='export'){
 			$activeSheet->setCellValue('A'.($lastest+$note),'Danh sách project cần tính:');
 			$Excel->getActiveSheet()->getStyle('A'.($lastest+$note))->getFont()->setSize(13)->setBold(true);
 			$note++;
-			foreach ($projects as $project) {
+			$_pw=array();
+			foreach ($selected as $k) {
+				if (strpos($projects->$k, '------ ') !== false) {
+				    $_pw[] =  str_replace('------ ', '-- ', $projects->$k);
+				}else if (strpos($projects->$k, '---- ') !== false) {
+				    $_pw[] =  str_replace('---- ', '-- ', $projects->$k);
+				}else if (strpos($projects->$k, '-- ') !== false) {
+				    $_pw[] =  $projects->$k;
+				}else{
+					$note++;
+					$activeSheet->setCellValue('A'.($lastest+$note),$projects->$k);
+					$activeSheet->mergeCells('A'.($lastest+$note).':C'.($lastest+$note));
+				}
+			}
+			$note++;
+			$activeSheet->setCellValue('A'.($lastest+$note),'Premium Water');
+			$activeSheet->mergeCells('A'.($lastest+$note).':C'.($lastest+$note));
+			foreach ($_pw as $k) {
 				$note++;
-				$activeSheet->setCellValue('A'.($lastest+$note),$project);
+				$activeSheet->setCellValue('A'.($lastest+$note),$k);
 				$activeSheet->mergeCells('A'.($lastest+$note).':C'.($lastest+$note));
 			}
             if(file_exists('./export/report-'.date('m-Y',strtotime($_POST['date'])).'.xlsx'))unlink(('./export/report-'.date('m-Y',strtotime($_POST['date'])).'.xlsx'));
@@ -417,8 +456,6 @@ if(isset($_GET['act']) && $_GET['act']=='export'){
 		exit;
 	}
 }
-$project=file_get_contents('./assets/project.json')?json_decode(file_get_contents('./assets/project.json')):$app->simpleProject();
-$selected=file_get_contents('./assets/projectSelected.json')?json_decode(file_get_contents('./assets/projectSelected.json')):[210,228,115,237,87,194,179,106,104,33,221,235];
 include './header.php';
 if($_POST&&$_POST['startDate']&&$_POST['endDate']){
 	isset($_POST['projects'])?$app->log('./assets/projectSelected.json',json_encode($_POST['projects']),"w"):null;
